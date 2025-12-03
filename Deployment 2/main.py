@@ -2,14 +2,16 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from fastapi import Depends, FastAPI, HTTPException
 from typing import Annotated, Any
+from sqlalchemy.pool import NullPool
 import uuid
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy import create_engine, Integer, Column, String, Float
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.ext.declarative import declarative_base
 from dotenv import load_dotenv
 import os
+from utils.preprocessing import preprocessing
 
 load_dotenv()
 
@@ -19,22 +21,22 @@ HOST = os.getenv("host")
 PORT = os.getenv("port")
 DBNAME = os.getenv("dbname")
 
-# Construct the SQLAlchemy connection string
+
 DATABASE_URL = f"postgresql+psycopg2://{USER}:{PASSWORD}@{HOST}:{PORT}/{DBNAME}?sslmode=require"
 
-# Create the SQLAlchemy engine
-engine = create_engine(DATABASE_URL)
+
+engine = create_engine(DATABASE_URL, poolclass=NullPool)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()
 
-class nasabah(Base):
+class DBNasabah(Base):
     __tablename__ = "nasabah"
 
     nasabah_id = Column(
         UUID(as_uuid=True), 
         primary_key=True, 
-        default=uuid.uuid4, # <-- Fungsi ini dipanggil saat objek dibuat
+        default=uuid.uuid4, 
         unique=True,
         nullable=False
     )
@@ -47,7 +49,7 @@ class nasabah(Base):
     housing = Column(String(100), nullable=False)
     loan = Column(String(100), nullable=False)
     contact = Column(String(100), nullable=False)
-    day = Column(String(100), nullable=False)
+    day_of_week = Column(String(100), nullable=False)
     month = Column(String(100), nullable=False)
     duration = Column(Integer, nullable=False)
     campaign = Column(Integer, nullable=False)
@@ -64,57 +66,75 @@ class nasabah(Base):
 Base.metadata.create_all(engine)
 
 
+import uuid
+from pydantic import BaseModel, Field, ConfigDict
+
 
 class NasabahCreate(BaseModel):
+ 
     age: int
     job: str
     marital: str
     education: str
     default: str
-    balance: int
     housing: str
     loan: str
     contact: str
-    day: str
     month: str
+    day_of_week: str 
     duration: int
     campaign: int
     pdays: int
     previous: int
     poutcome: str
-    emp_var_rate: float
-    cons_price_idx: float
-    cons_conf_idx: float
+    
+
+    emp_var_rate: float = Field(alias='emp.var.rate') 
+    cons_price_idx: float = Field(alias='cons.price.idx')
+    cons_conf_idx: float = Field(alias='cons.conf.idx')
     euribor3m: float
-    nr_employed: float
+    nr_employed: float = Field(alias='nr.employed')
+    
+ 
+    balance: int 
+
+    model_config = ConfigDict(
+        populate_by_name=True, 
+        extra='ignore'         
+    )
+
 
 class NasabahResponse(BaseModel):
-    nasabah_id: uuid.UUID
+    nasabah_id: uuid.UUID 
     age: int
     job: str
     marital: str
     education: str
     default: str
-    balance: int
     housing: str
     loan: str
     contact: str
-    day: str
     month: str
+    day_of_week: str 
     duration: int
     campaign: int
     pdays: int
     previous: int
     poutcome: str
+    
+
     emp_var_rate: float
     cons_price_idx: float
     cons_conf_idx: float
     euribor3m: float
     nr_employed: float
-    predicted: float
+    balance: int
+
+    predicted: float 
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(
+        from_attributes=True 
+    )
 
 def get_db():
     db = SessionLocal()
@@ -126,14 +146,14 @@ def get_db():
 app = FastAPI(title="Rest API")
 
 @app.get("/")
-def root():
+async def root():
     return {"message": "Sever is Ok"}
 
 @app.post("/nasabah/", response_model=NasabahResponse)
-def create_nasabah(nasabah: NasabahCreate, db: Session = Depends(get_db)):
-
-
-    db_nasabah = nasabah(**nasabah.dict())
+async def create_nasabah(nasabah: NasabahCreate, db: Session = Depends(get_db)):
+    predicted_proba = await preprocessing(nasabah.model_dump())
+    predicted_proba = float(predicted_proba)
+    db_nasabah = DBNasabah(**nasabah.model_dump(), predicted=predicted_proba)
     db.add(db_nasabah)
     db.commit()
     db.refresh(db_nasabah)
