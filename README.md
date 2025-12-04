@@ -1,5 +1,5 @@
 # Machine-learning
-## Environtment
+## Environment Python
 ### Step - by - Step
 1. Clone this repository
 2. Change directory to deployment 2 <br>
