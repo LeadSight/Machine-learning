@@ -105,30 +105,30 @@ class NasabahCreate(BaseModel):
 
 
 class NasabahResponse(BaseModel):
-    nasabah_id: uuid.UUID 
-    age: int
-    job: str
-    marital: str
-    education: str
-    default: str
-    housing: str
-    loan: str
-    contact: str
-    month: str
-    day_of_week: str 
-    duration: int
-    campaign: int
-    pdays: int
-    previous: int
-    poutcome: str
+    # nasabah_id: uuid.UUID 
+    # age: int
+    # job: str
+    # marital: str
+    # education: str
+    # default: str
+    # housing: str
+    # loan: str
+    # contact: str
+    # month: str
+    # day_of_week: str 
+    # duration: int
+    # campaign: int
+    # pdays: int
+    # previous: int
+    # poutcome: str
     
 
-    emp_var_rate: float
-    cons_price_idx: float
-    cons_conf_idx: float
-    euribor3m: float
-    nr_employed: float
-    balance: int
+    # emp_var_rate: float
+    # cons_price_idx: float
+    # cons_conf_idx: float
+    # euribor3m: float
+    # nr_employed: float
+    # balance: int
 
     predicted: float 
     
@@ -150,11 +150,13 @@ async def root():
     return {"message": "Sever is Ok"}
 
 @app.post("/nasabah/", response_model=NasabahResponse)
-async def create_nasabah(nasabah: NasabahCreate, db: Session = Depends(get_db)):
-    predicted_proba = await preprocessing(nasabah.model_dump())
+async def create_nasabah(
+    nasabah: NasabahCreate 
+):
+
+    nasabah_data = nasabah.model_dump()
+    
+    predicted_proba = await preprocessing(nasabah_data)
     predicted_proba = float(predicted_proba)
-    db_nasabah = DBNasabah(**nasabah.model_dump(), predicted=predicted_proba)
-    db.add(db_nasabah)
-    db.commit()
-    db.refresh(db_nasabah)
-    return db_nasabah
+    
+    return {"predicted": predicted_proba}
